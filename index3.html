@@ -1,0 +1,190 @@
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text to Image Search Demo</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        color: #333;
+        background-color: #f7f7f7;
+        margin: 0;
+        padding: 8px;
+        text-align: center;
+    }
+
+    h1 {
+        color: #333;
+    }
+
+    form {
+        margin: 10px auto;
+        width: 400px;
+        background-color: #fff;
+        padding: 10px;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    input[type="text"] {
+        width: 100%; /* 设置宽度为100%，使其填满form容器 */
+        padding: 8px; /* 增加padding以更好的视觉效果 */
+        margin-bottom: 10px; /* 增加margin-bottom以防止文本框和按钮之间距离太近 */
+        /* 可以添加更多样式 */
+    }
+
+    input[type="file"] {
+        margin: 5px 0;
+        font-size: 1.1em; /* This will enlarge the font size */
+        cursor: pointer; /* Optionally, ensure the cursor changes to a pointer */
+    }
+
+    /* Removed styles for input[type="submit"] since button is removed */
+
+    img {
+        margin-top: 5px;
+        max-width: 250px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Style for searching status */
+    #search-status {
+        margin-top: 5px;
+        font-size: 1.1em; /* 设置字体大小为原来的1.2倍 */
+        color: blue; /* 设置字体颜色为蓝色 */
+    }
+    .enlarged {
+        width: 100%;
+        max-width: 600px;
+        z-index: 1000;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 2px solid #fff;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        cursor: pointer;
+        background-color: #fff; /* 添加白色背景 */
+    }
+
+</style>
+</head>
+<body>
+<h2>Text to Image Search Demo</h2>
+
+<script>
+function toggleImageSize(event) {
+    var image = event.target;
+    image.classList.toggle('enlarged');
+}
+
+// 验证表单函数，防止文本输入框为空
+// 在index3.html中修改已有的validateForm函数
+function validateForm() {
+    var textInput = document.getElementById('textInput').value;
+    if (textInput.trim() === '') {
+        alert('Please input search text'); // 如果文本输入为空，则弹出警告
+        return false;
+    } else {
+        // 显示搜索中状态
+        document.getElementById('search-status').textContent = 'Searching...';
+        document.getElementById('search-status').style.display = 'block';
+    }
+    return true;
+}
+
+
+function resizeImage(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = document.createElement("img");
+        img.onload = function() {
+            let canvas = document.createElement("canvas");
+            const maxWidth = 1200;
+            const scaleSize = maxWidth / img.width;
+            canvas.width = maxWidth;
+            canvas.height = img.height * scaleSize;
+
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            ctx.canvas.toBlob((blob) => {
+                callback(blob);
+            }, 'image/jpeg', 1); // Adjust quality as needed
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function setupFileChangeListener() {
+    const fileInput = document.getElementById('imageInput');
+    const form = document.getElementById('uploadForm');
+    const searchStatus = document.getElementById('search-status');
+
+    fileInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            resizeImage(this.files[0], function(resizedBlob) {
+                const formData = new FormData(form);
+                formData.set('file', resizedBlob, fileInput.files[0].name); // Replace file with resized version
+
+                searchStatus.textContent = 'Searching...';
+                searchStatus.style.display = 'block';
+
+                fetch('/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(html => {
+                    document.body.innerHTML = html;
+                    setupFileChangeListener(); // Rebind the listener
+                    searchStatus.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    searchStatus.textContent = 'Error during search.';
+                    searchStatus.style.display = 'block';
+                });
+            });
+        }
+    });
+}
+
+
+
+document.addEventListener("DOMContentLoaded", setupFileChangeListener);
+
+</script>
+
+<form id="searchForm" method="post" action="/text" onsubmit="return validateForm()">
+    <input type="text" name="text_input" id="textInput" placeholder="Enter search text here..." value="{{ text_input }}">
+    <input type="submit" value="Search">
+</form>
+
+
+
+{% if search_results %}
+    <h3>Search Results:</h3>
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-around;">
+        
+        {% for result in search_results %}
+            <div style="flex-basis:18%;">
+                <a href="{{ result.image_url }}">
+                    <img src="{{ result.image_url }}" alt="Search Result" style="width: 100%; margin: 1%;">
+                </a>
+                <p>{{ result.distance }}</p>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+
+
+
+</body>
+</html>
